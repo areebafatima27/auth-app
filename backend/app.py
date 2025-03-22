@@ -9,7 +9,8 @@ from pydub.silence import split_on_silence
 from pyannote.audio import Pipeline  # Pyannote for diarization
 from colorama import Fore, init
 import json
-
+from transformers import pipeline
+import re
 init(autoreset=True)
 
 app = Flask(__name__)
@@ -22,6 +23,8 @@ if not os.path.exists(AUDIO_DIR):
 
 # Load Whisper model once globally when the app starts
 whisper_model = whisper.load_model('medium')
+# Load the Hugging Face summarization pipeline globally
+summarizer = pipeline("summarization", model="t5-small")
 
 # Function to check if FFmpeg is installed
 def check_ffmpeg():
@@ -55,6 +58,35 @@ def split_audio_into_chunks(audio_path, output_folder, min_silence_len=700, sile
     except Exception as e:
         print(Fore.RED + f"Error during audio splitting: {e}")
         return []
+    
+def clean_summary(summary):
+    """Remove any remaining speaker labels or redundant information from the summary."""
+    cleaned_summary = re.sub(r'speaker \d+:\s*', '', summary, flags=re.IGNORECASE)
+    return cleaned_summary
+
+def summarize_text(text, max_chunk_size=1024):
+    # Split text into chunks that fit within the model's max token length
+    if len(text) <= max_chunk_size:
+        print("Text is small enough to summarize directly...")
+        chunks = [text]  # No need to split
+    else:
+        print("Text is too large, splitting into chunks for summarization...")
+        chunks = [text[i:i+max_chunk_size] for i in range(0, len(text), max_chunk_size)]
+    
+    summary = []
+    for chunk in chunks:
+        # Dynamically set the max_length based on input length, ensuring it's less than the input
+        input_length = len(chunk.split())
+        max_length = min(300, max(50, int(input_length * 0.3)))  # 30% of input length or at least 50 tokens
+        
+        # Summarize each chunk
+        summarized_chunk = summarizer(chunk, max_length=max_length, min_length=25, do_sample=False)[0]['summary_text']
+        summary.append(summarized_chunk)
+    
+    # Combine all summarized chunks into one text
+    summary_text = ' '.join(summary)
+    return summary_text
+
 
 # Function to transcribe an audio file using Whisper
 def transcribe_audio(audio_file_path):
@@ -66,6 +98,12 @@ def transcribe_audio(audio_file_path):
     except Exception as e:
         print(Fore.RED + f"Error during transcription: {str(e)}")
         return f"Error transcribing audio: {str(e)}", []
+
+def remove_diarization(transcription):
+    """Remove speaker labels from transcription text."""
+    # Regex pattern to remove speaker labels (e.g., 'speaker 1:')
+    cleaned_text = re.sub(r'speaker \d+:\s*', '', transcription, flags=re.IGNORECASE)
+    return cleaned_text
 
 # Function to diarize an audio chunk using Pyannote on CPU
 def diarize_chunk(audio_file_path):
@@ -92,6 +130,13 @@ def diarize_chunk(audio_file_path):
     except Exception as e:
         print(Fore.RED + f"Error during diarization: {str(e)}")
         return []
+
+def remove_diarization(transcription):
+    """Remove speaker labels from transcription text."""
+    # Regex pattern to remove speaker labels (e.g., 'speaker 1:')
+    cleaned_text = re.sub(r'speaker \d+:\s*', '', transcription, flags=re.IGNORECASE)
+    return cleaned_text
+
  # Function to merge diarization and transcription
 def merge_diarization_transcription(transcription_segments, diarization_segments):
     """Combines transcription and diarization into a single block with proper speaker labeling."""
@@ -147,9 +192,10 @@ def merge_diarization_transcription(transcription_segments, diarization_segments
 def index():
     return 'Audio upload, recording, transcription, and diarization server is running.'
 
+
 @app.route('/upload', methods=['POST'])
 def upload_audio():
-    """Handles audio file uploads and processes transcription and diarization."""
+    """Handles audio file uploads and processes transcription, diarization, and summarization."""
     if 'audio' not in request.files:
         return jsonify({"error": "No audio file found"}), 400
 
@@ -163,10 +209,10 @@ def upload_audio():
 
     # Convert .webm to .mp3 using FFmpeg
     mp3_file_path = os.path.join(AUDIO_DIR, f'{custom_filename}_{timestamp}.mp3')
-    
+
     if not check_ffmpeg():
         return jsonify({"error": "FFmpeg is not installed"}), 500
-    
+
     try:
         subprocess.run(['ffmpeg', '-i', webm_file_path, '-vn', '-ar', '44100', '-ac', '2', '-b:a', '192k', mp3_file_path], check=True)
         os.remove(webm_file_path)  # Remove the original .webm file
@@ -180,7 +226,7 @@ def upload_audio():
             transcription_text = ""
             all_transcription_segments = []
             all_diarization_segments = []
-            
+
             for chunk in chunk_files:
                 chunk_text, chunk_segments = transcribe_audio(chunk)
                 transcription_text += chunk_text
@@ -198,10 +244,23 @@ def upload_audio():
             with open(transcription_file_path, "w", encoding="utf-8") as file:
                 file.write(merged_output)
 
+            # Clean the transcription text before summarization
+            cleaned_transcription = remove_diarization(merged_output)
+            print("Cleaned Transcription:", cleaned_transcription)  # Debugging
+
+            # Summarize the cleaned transcription
+            summary_text = summarize_text(cleaned_transcription)
+            print("Summary before cleaning:", summary_text)  # Debugging
+
+            # Clean the summary to remove any remaining speaker labels
+            cleaned_summary = clean_summary(summary_text)
+            print("Cleaned Summary:", cleaned_summary)  # Debugging
+
             return jsonify({
-                "message": "Audio uploaded, converted, transcribed, and diarized successfully",
+                "message": "Audio uploaded, converted, transcribed, diarized, and summarized successfully",
                 "audioFilename": f'{custom_filename}_{timestamp}.mp3',
                 "transcription": merged_output,
+                "summary": cleaned_summary
             }), 200
         else:
             return jsonify({"error": "Failed to split audio into chunks"}), 500

@@ -15,10 +15,12 @@ function UploadPage() {
   const [errorMessage, setErrorMessage] = useState("")
   const [recordingMessage, setRecordingMessage] = useState("")
   const [transcription, setTranscription] = useState("")
+  const [summary, setSummary] = useState("") // State for summary
   const [diarization, setDiarization] = useState([]) // Diarization as an array of objects
   const [isUploading, setIsUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0) // State for upload progress
   const [isTranscribing, setIsTranscribing] = useState(false)
+  const [showSummary, setShowSummary] = useState(false) // State to control summary visibility
   const mediaRecorderRef = useRef(null)
   const audioChunks = useRef([])
 
@@ -36,6 +38,8 @@ function UploadPage() {
     setIsUploading(true)
     setIsTranscribing(true)
     setTranscription("")
+    setSummary("") // Reset summary
+    setShowSummary(false) // Hide summary when uploading new file
     setRecordingMessage("")
 
     const formData = new FormData()
@@ -61,6 +65,13 @@ function UploadPage() {
           setTranscription("Transcription failed. Please try again.")
         }
 
+        // Handle summary
+        if (result.summary) {
+          setSummary(result.summary)
+        } else {
+          setSummary("")
+        }
+
         if (result.diarization && Array.isArray(result.diarization)) {
           setDiarization(result.diarization)
         } else {
@@ -71,6 +82,7 @@ function UploadPage() {
       } else {
         setErrorMessage("Error uploading audio")
         setTranscription("")
+        setSummary("")
       }
 
       setIsUploading(false)
@@ -82,6 +94,7 @@ function UploadPage() {
       setIsUploading(false)
       setIsTranscribing(false)
       setTranscription("")
+      setSummary("")
     }
 
     xhr.open("POST", "http://127.0.0.1:5000/upload")
@@ -302,6 +315,36 @@ function UploadPage() {
               rows="6"
               className="w-full p-4 border border-purple-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-shadow bg-purple-50"
             ></textarea>
+
+            {/* "Generate Summary" Button */}
+            {!showSummary && (
+              <motion.button
+                className="mt-4 px-5 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl shadow-md hover:shadow-lg transition-all"
+                onClick={() => setShowSummary(true)}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                Generate Summary
+              </motion.button>
+            )}
+          </motion.div>
+        )}
+
+        {/* Summary Section */}
+        {showSummary && summary && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+            className="mt-8 bg-white p-6 rounded-xl border border-purple-100 shadow-md"
+          >
+            <h2 className="text-2xl font-semibold text-purple-800 mb-4 flex items-center">
+              <CheckCircleIcon className="w-6 h-6 text-green-500 mr-2" />
+              Summary
+            </h2>
+            <div className="w-full p-4 border border-purple-200 rounded-xl bg-purple-50 prose prose-purple max-w-none">
+              {summary}
+            </div>
           </motion.div>
         )}
 
@@ -385,4 +428,3 @@ function UploadPage() {
 }
 
 export default UploadPage
-
