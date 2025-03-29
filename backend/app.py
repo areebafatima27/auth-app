@@ -11,7 +11,12 @@ from colorama import Fore, init
 import json
 from transformers import pipeline
 import re
+from dotenv import load_dotenv  # Import dotenv to load environment variables
+
 init(autoreset=True)
+
+# Load environment variables from .env.local
+load_dotenv(dotenv_path='.env.local')
 
 app = Flask(__name__)
 CORS(app, resources={r"/upload": {"origins": "*"}})  # Allow CORS for frontend requests
@@ -110,9 +115,12 @@ def diarize_chunk(audio_file_path):
     """Diarizes an audio chunk to identify speakers."""
     print(Fore.YELLOW + f"Diarizing: {audio_file_path}")
     try:
+        # Get the Hugging Face token from environment variable
+        hf_token = os.getenv("HUGGINGFACE_AUTH_TOKEN")
+
         pipeline = Pipeline.from_pretrained(
             "pyannote/speaker-diarization-3.1",
-            use_auth_token="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"  # replace with your token
+            use_auth_token=hf_token  # Use the token from .env.local
         )
 
         diarization = pipeline(audio_file_path)
@@ -131,11 +139,6 @@ def diarize_chunk(audio_file_path):
         print(Fore.RED + f"Error during diarization: {str(e)}")
         return []
 
-def remove_diarization(transcription):
-    """Remove speaker labels from transcription text."""
-    # Regex pattern to remove speaker labels (e.g., 'speaker 1:')
-    cleaned_text = re.sub(r'speaker \d+:\s*', '', transcription, flags=re.IGNORECASE)
-    return cleaned_text
 
  # Function to merge diarization and transcription
 def merge_diarization_transcription(transcription_segments, diarization_segments):
@@ -187,7 +190,6 @@ def merge_diarization_transcription(transcription_segments, diarization_segments
     return "\n".join(merged_output)
 
 
-
 @app.route('/')
 def index():
     return 'Audio upload, recording, transcription, and diarization server is running.'
@@ -214,61 +216,39 @@ def upload_audio():
         return jsonify({"error": "FFmpeg is not installed"}), 500
 
     try:
-        subprocess.run(['ffmpeg', '-i', webm_file_path, '-vn', '-ar', '44100', '-ac', '2', '-b:a', '192k', mp3_file_path], check=True)
-        os.remove(webm_file_path)  # Remove the original .webm file
-
-        # Split audio into smaller chunks
-        chunks_folder = os.path.join(AUDIO_DIR, f"chunks_{timestamp}")
-        chunk_files = split_audio_into_chunks(mp3_file_path, chunks_folder)
-
-        if chunk_files:
-            # Transcribe and diarize audio chunks
-            transcription_text = ""
-            all_transcription_segments = []
-            all_diarization_segments = []
-
-            for chunk in chunk_files:
-                chunk_text, chunk_segments = transcribe_audio(chunk)
-                transcription_text += chunk_text
-                all_transcription_segments.extend(chunk_segments)
-
-                # Perform diarization on each chunk
-                diarization_segments = diarize_chunk(chunk)
-                all_diarization_segments.extend(diarization_segments)
-
-            # Merge transcription and diarization
-            merged_output = merge_diarization_transcription(all_transcription_segments, all_diarization_segments)
-
-            # Save merged transcription to a text file
-            transcription_file_path = os.path.join(AUDIO_DIR, f'{custom_filename}_{timestamp}_transcription.txt')
-            with open(transcription_file_path, "w", encoding="utf-8") as file:
-                file.write(merged_output)
-
-            # Clean the transcription text before summarization
-            cleaned_transcription = remove_diarization(merged_output)
-            print("Cleaned Transcription:", cleaned_transcription)  # Debugging
-
-            # Summarize the cleaned transcription
-            summary_text = summarize_text(cleaned_transcription)
-            print("Summary before cleaning:", summary_text)  # Debugging
-
-            # Clean the summary to remove any remaining speaker labels
-            cleaned_summary = clean_summary(summary_text)
-            print("Cleaned Summary:", cleaned_summary)  # Debugging
-
-            return jsonify({
-                "message": "Audio uploaded, converted, transcribed, diarized, and summarized successfully",
-                "audioFilename": f'{custom_filename}_{timestamp}.mp3',
-                "transcription": merged_output,
-                "summary": cleaned_summary
-            }), 200
-        else:
-            return jsonify({"error": "Failed to split audio into chunks"}), 500
-
+        subprocess.run(['ffmpeg', '-i', webm_file_path, '-vn', '-ar', '44100', '-ac', '2', '-b:a', '192k', mp3_file_path],
+                       check=True)
+        print(Fore.GREEN + f"Converted {webm_file_path} to {mp3_file_path}")
     except subprocess.CalledProcessError as e:
-        return jsonify({"error": f"FFmpeg conversion error: {str(e)}"}), 500
-    except Exception as e:
-        return jsonify({"error": f"Unexpected error: {str(e)}"}), 500
+        print(Fore.RED + f"FFmpeg conversion error: {e}")
+        return jsonify({"error": "Error converting audio file"}), 500
+
+    # Split the MP3 file into chunks
+    chunk_folder = os.path.join(AUDIO_DIR, f'{custom_filename}_chunks')
+    audio_chunks = split_audio_into_chunks(mp3_file_path, chunk_folder)
+
+    if not audio_chunks:
+        return jsonify({"error": "No audio chunks created"}), 500
+
+    # Process each chunk
+    merged_transcription = []
+    for i, chunk_path in enumerate(audio_chunks):
+        transcription_text, transcription_segments = transcribe_audio(chunk_path)
+        diarization_segments = diarize_chunk(chunk_path)
+        merged_text = merge_diarization_transcription(transcription_segments, diarization_segments)
+        merged_transcription.append(merged_text)
+
+    full_transcription = "\n".join(merged_transcription)
+
+    # Summarize the merged transcription
+    cleaned_transcription = remove_diarization(full_transcription)
+    summary_text = summarize_text(cleaned_transcription)
+
+    return jsonify({
+        "transcription": full_transcription,
+        "summary": summary_text
+    })
+
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=True)

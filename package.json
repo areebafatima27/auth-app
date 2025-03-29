@@ -9,6 +9,7 @@
     "@fortawesome/react-fontawesome": "^0.2.2",
     "@heroicons/react": "^2.2.0",
     "cra-template": "1.2.0",
+    "dotenv": "^16.4.7",
     "firebase": "^11.1.0",
     "framer-motion": "^11.17.0",
     "react": "^19.0.0",
