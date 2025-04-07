@@ -12,6 +12,7 @@ import json
 from transformers import pipeline
 import re
 from dotenv import load_dotenv  # Import dotenv to load environment variables
+import yake
 
 init(autoreset=True)
 
@@ -19,7 +20,7 @@ init(autoreset=True)
 load_dotenv(dotenv_path='.env.local')
 
 app = Flask(__name__)
-CORS(app, resources={r"/upload": {"origins": "*"}})  # Allow CORS for frontend requests
+CORS(app, resources={r"/upload": {"origins": "*"}, r"/extract-keypoints": {"origins": "*"}})  # Allow CORS for frontend requests
 
 # Create a directory for uploaded audio files
 AUDIO_DIR = 'uploaded_audio'
@@ -27,7 +28,7 @@ if not os.path.exists(AUDIO_DIR):
     os.makedirs(AUDIO_DIR)
 
 # Load Whisper model once globally when the app starts
-whisper_model = whisper.load_model('medium')
+whisper_model = whisper.load_model('small')
 # Load the Hugging Face summarization pipeline globally
 summarizer = pipeline("summarization", model="t5-small")
 
@@ -63,7 +64,7 @@ def split_audio_into_chunks(audio_path, output_folder, min_silence_len=700, sile
     except Exception as e:
         print(Fore.RED + f"Error during audio splitting: {e}")
         return []
-    
+
 def clean_summary(summary):
     """Remove any remaining speaker labels or redundant information from the summary."""
     cleaned_summary = re.sub(r'speaker \d+:\s*', '', summary, flags=re.IGNORECASE)
@@ -140,7 +141,28 @@ def diarize_chunk(audio_file_path):
         return []
 
 
- # Function to merge diarization and transcription
+# Function to extract key points from text using YAKE
+def extract_keypoints(text):
+    """Extracts key phrases from the transcription using YAKE."""
+    try:
+        # Set up YAKE parameters
+        language = "en"  # Set the language to English
+        max_ngram_size = 3  # Extract phrases of 1 to 3 words
+        num_keywords = 5  # Number of key phrases to extract
+        yake_model = yake.KeywordExtractor(lan=language, n=1, dedupLim=0.9, top=num_keywords, features=None)
+
+        # Extract keywords
+        keywords = yake_model.extract_keywords(text)
+        keypoints = [keyword[0] for keyword in keywords]  # Extract only the phrases (not the scores)
+        print(Fore.GREEN + "Extracted Key Points: ", keypoints)
+
+        return keypoints
+    except Exception as e:
+        print(Fore.RED + f"Error during key point extraction: {e}")
+        return []
+
+
+# Function to merge diarization and transcription
 def merge_diarization_transcription(transcription_segments, diarization_segments):
     """Combines transcription and diarization into a single block with proper speaker labeling."""
     merged_output = []
@@ -194,10 +216,26 @@ def merge_diarization_transcription(transcription_segments, diarization_segments
 def index():
     return 'Audio upload, recording, transcription, and diarization server is running.'
 
+@app.route('/extract-keypoints', methods=['POST'])
+def handle_keypoints():
+    try:
+        data = request.get_json()
+        transcription = data.get('transcription', '')
+
+        if not transcription:
+            return jsonify({'error': 'No transcription provided'}), 400
+
+        keypoints = extract_keypoints(transcription)
+        return jsonify({'keypoints': keypoints})  # Ensure lowercase 'keypoints'
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 
 @app.route('/upload', methods=['POST'])
 def upload_audio():
-    """Handles audio file uploads and processes transcription, diarization, and summarization."""
+    """Handles audio file uploads and processes transcription, diarization, summarization, and key points extraction."""
     if 'audio' not in request.files:
         return jsonify({"error": "No audio file found"}), 400
 
@@ -244,11 +282,16 @@ def upload_audio():
     cleaned_transcription = remove_diarization(full_transcription)
     summary_text = summarize_text(cleaned_transcription)
 
+    # Extract key points using YAKE
+    keypoints = extract_keypoints(summary_text)
+
     return jsonify({
         "transcription": full_transcription,
-        "summary": summary_text
+        "summary": summary_text,
+        "keypoints": keypoints  # Include key points in the response
     })
 
 
+# Running the Flask app
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(debug=True, host='0.0.0.0')

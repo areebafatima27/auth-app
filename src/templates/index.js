@@ -1,145 +1,178 @@
-"use client"
+"use client";
 
-import { useState, useRef } from "react"
-import { motion } from "framer-motion"
+import { useState, useRef } from "react";
+import { motion } from "framer-motion";
 import {
   CloudArrowUpIcon,
   CheckCircleIcon,
   ExclamationCircleIcon,
   MicrophoneIcon,
   SpeakerWaveIcon,
-} from "@heroicons/react/24/outline"
+  SparklesIcon,
+} from "@heroicons/react/24/outline";
 
 function UploadPage() {
-  const [audioFile, setAudioFile] = useState(null)
-  const [errorMessage, setErrorMessage] = useState("")
-  const [recordingMessage, setRecordingMessage] = useState("")
-  const [transcription, setTranscription] = useState("")
-  const [summary, setSummary] = useState("") // State for summary
-  const [diarization, setDiarization] = useState([]) // Diarization as an array of objects
-  const [isUploading, setIsUploading] = useState(false)
-  const [uploadProgress, setUploadProgress] = useState(0) // State for upload progress
-  const [isTranscribing, setIsTranscribing] = useState(false)
-  const [showSummary, setShowSummary] = useState(false) // State to control summary visibility
-  const mediaRecorderRef = useRef(null)
-  const audioChunks = useRef([])
+  const [audioFile, setAudioFile] = useState(null);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [recordingMessage, setRecordingMessage] = useState("");
+  const [transcription, setTranscription] = useState("");
+  const [summary, setSummary] = useState(""); // State for summary
+  const [diarization, setDiarization] = useState([]); // Diarization as an array of objects
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0); // State for upload progress
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [showSummary, setShowSummary] = useState(false); // State to control summary visibility
+  const [keyPoints, setKeyPoints] = useState([]); // State for key points
+  const [isExtractingKeyPoints, setIsExtractingKeyPoints] = useState(false); // Loading state for key points
+  const mediaRecorderRef = useRef(null);
+  const audioChunks = useRef([]);
 
   const handleFileChange = (e) => {
-    setAudioFile(e.target.files[0])
-    setErrorMessage("")
-  }
+    setAudioFile(e.target.files[0]);
+    setErrorMessage("");
+  };
 
   const handleUpload = () => {
     if (!audioFile) {
-      setErrorMessage("No file selected")
-      return
+      setErrorMessage("No file selected");
+      return;
     }
 
-    setIsUploading(true)
-    setIsTranscribing(true)
-    setTranscription("")
-    setSummary("") // Reset summary
-    setShowSummary(false) // Hide summary when uploading new file
-    setRecordingMessage("")
+    setIsUploading(true);
+    setIsTranscribing(true);
+    setTranscription("");
+    setSummary(""); // Reset summary
+    setShowSummary(false); // Hide summary when uploading new file
+    setRecordingMessage("");
+    setKeyPoints([]); // Reset key points when uploading new file
 
-    const formData = new FormData()
-    formData.append("audio", audioFile)
+    const formData = new FormData();
+    formData.append("audio", audioFile);
 
-    const xhr = new XMLHttpRequest()
+    const xhr = new XMLHttpRequest();
 
     // Track progress
     xhr.upload.onprogress = (event) => {
       if (event.lengthComputable) {
-        const percentComplete = Math.round((event.loaded / event.total) * 100)
-        setUploadProgress(percentComplete)
+        const percentComplete = Math.round((event.loaded / event.total) * 100);
+        setUploadProgress(percentComplete);
       }
-    }
+    };
 
     xhr.onload = () => {
       if (xhr.status === 200) {
-        const result = JSON.parse(xhr.responseText)
+        const result = JSON.parse(xhr.responseText);
 
         if (result.transcription) {
-          setTranscription(result.transcription)
+          setTranscription(result.transcription);
         } else {
-          setTranscription("Transcription failed. Please try again.")
+          setTranscription("Transcription failed. Please try again.");
         }
 
         // Handle summary
         if (result.summary) {
-          setSummary(result.summary)
+          setSummary(result.summary);
         } else {
-          setSummary("")
+          setSummary("");
         }
 
         if (result.diarization && Array.isArray(result.diarization)) {
-          setDiarization(result.diarization)
+          setDiarization(result.diarization);
         } else {
-          setDiarization([])
+          setDiarization([]);
         }
 
-        setErrorMessage("")
+        setErrorMessage("");
       } else {
-        setErrorMessage("Error uploading audio")
-        setTranscription("")
-        setSummary("")
+        setErrorMessage("Error uploading audio");
+        setTranscription("");
+        setSummary("");
       }
 
-      setIsUploading(false)
-      setIsTranscribing(false)
-    }
+      setIsUploading(false);
+      setIsTranscribing(false);
+    };
 
     xhr.onerror = () => {
-      setErrorMessage("Error uploading audio")
-      setIsUploading(false)
-      setIsTranscribing(false)
-      setTranscription("")
-      setSummary("")
+      setErrorMessage("Error uploading audio");
+      setIsUploading(false);
+      setIsTranscribing(false);
+      setTranscription("");
+      setSummary("");
+    };
+
+    xhr.open("POST", "http://127.0.0.1:5000/upload");
+    xhr.send(formData);
+  };
+
+  const handleKeyPoints = async () => {
+    if (!transcription) {
+      setErrorMessage("No transcription available");
+      return;
     }
 
-    xhr.open("POST", "http://127.0.0.1:5000/upload")
-    xhr.send(formData)
-  }
+    setIsExtractingKeyPoints(true);
+    try {
+      const response = await fetch("http://127.0.0.1:5000/extract-keypoints", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ transcription }),
+      });
+
+      if (!response.ok) throw new Error("Error extracting key points");
+
+      const result = await response.json();
+      setKeyPoints(result.keypoints || []); // Change to lowercase 'keypoints'
+      setErrorMessage("");
+    } catch (error) {
+      console.error("Error extracting key points:", error);
+      setErrorMessage("Error extracting key points");
+    } finally {
+      setIsExtractingKeyPoints(false);
+    }
+  };
 
   const startRecording = async () => {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-    mediaRecorderRef.current = new MediaRecorder(stream)
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    mediaRecorderRef.current = new MediaRecorder(stream);
     mediaRecorderRef.current.ondataavailable = (event) => {
-      audioChunks.current.push(event.data)
-    }
+      audioChunks.current.push(event.data);
+    };
     mediaRecorderRef.current.onstop = () => {
-      const audioBlob = new Blob(audioChunks.current, { type: "audio/wav" })
-      const audioFile = new File([audioBlob], "recordedAudio.wav", { type: "audio/wav" })
-      setAudioFile(audioFile)
-      audioChunks.current = []
-    }
-    mediaRecorderRef.current.start()
-    setRecordingMessage("Recording started...")
-  }
+      const audioBlob = new Blob(audioChunks.current, { type: "audio/wav" });
+      const audioFile = new File([audioBlob], "recordedAudio.wav", {
+        type: "audio/wav",
+      });
+      setAudioFile(audioFile);
+      audioChunks.current = [];
+    };
+    mediaRecorderRef.current.start();
+    setRecordingMessage("Recording started...");
+  };
 
   const pauseRecording = () => {
     if (mediaRecorderRef.current?.state === "recording") {
-      mediaRecorderRef.current.pause()
-      setRecordingMessage("Recording paused.")
+      mediaRecorderRef.current.pause();
+      setRecordingMessage("Recording paused.");
     }
-  }
+  };
 
   const resumeRecording = () => {
     if (mediaRecorderRef.current?.state === "paused") {
-      mediaRecorderRef.current.resume()
-      setRecordingMessage("Recording resumed.")
+      mediaRecorderRef.current.resume();
+      setRecordingMessage("Recording resumed.");
     }
-  }
+  };
 
   const stopRecording = () => {
     if (mediaRecorderRef.current?.state !== "inactive") {
-      mediaRecorderRef.current.stop()
-      setRecordingMessage("Recording stopped.")
+      mediaRecorderRef.current.stop();
+      setRecordingMessage("Recording stopped.");
       setTimeout(() => {
-        setRecordingMessage("")
-      }, 2000)
+        setRecordingMessage("");
+      }, 2000);
     }
-  }
+  };
 
   // Audio wave animation for decorative purposes
   const AudioWave = () => {
@@ -161,8 +194,8 @@ function UploadPage() {
           />
         ))}
       </div>
-    )
-  }
+    );
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-100 via-indigo-100 to-blue-100 flex items-center justify-center p-4">
@@ -189,8 +222,16 @@ function UploadPage() {
             className="w-64 flex flex-col items-center px-4 py-6 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl shadow-lg tracking-wide uppercase border border-purple-700 cursor-pointer hover:from-purple-700 hover:to-indigo-700 transition-all duration-300 transform hover:scale-105"
           >
             <CloudArrowUpIcon className="w-8 h-8" />
-            <span className="mt-2 text-base leading-normal">Select audio file</span>
-            <input type="file" id="audio-file" accept="audio/*" onChange={handleFileChange} className="hidden" />
+            <span className="mt-2 text-base leading-normal">
+              Select audio file
+            </span>
+            <input
+              type="file"
+              id="audio-file"
+              accept="audio/*"
+              onChange={handleFileChange}
+              className="hidden"
+            />
           </label>
           {audioFile && (
             <motion.p
@@ -237,7 +278,9 @@ function UploadPage() {
           >
             <div className="relative w-24 h-24">
               <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-purple-600 text-sm font-medium">Processing</span>
+                <span className="text-purple-600 text-sm font-medium">
+                  Processing
+                </span>
               </div>
               <svg className="animate-spin w-full h-full" viewBox="0 0 100 100">
                 <circle
@@ -264,8 +307,12 @@ function UploadPage() {
                 />
               </svg>
             </div>
-            <p className="mt-4 text-purple-800 font-medium">Transcribing your audio...</p>
-            <p className="text-gray-500 text-sm mt-2">This may take a moment depending on the file size</p>
+            <p className="mt-4 text-purple-800 font-medium">
+              Transcribing your audio...
+            </p>
+            <p className="text-gray-500 text-sm mt-2">
+              This may take a moment depending on the file size
+            </p>
 
             <div className="mt-4 flex space-x-2">
               {[...Array(3)].map((_, i) => (
@@ -316,17 +363,33 @@ function UploadPage() {
               className="w-full p-4 border border-purple-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-shadow bg-purple-50"
             ></textarea>
 
-            {/* "Generate Summary" Button */}
-            {!showSummary && (
+            <div className="flex gap-4 mt-4">
+              {/* "Generate Summary" Button */}
+              {!showSummary && (
+                <motion.button
+                  className="px-5 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl shadow-md hover:shadow-lg transition-all"
+                  onClick={() => setShowSummary(true)}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  Generate Summary
+                </motion.button>
+              )}
+
+              {/* "Extract Key Points" Button */}
               <motion.button
-                className="mt-4 px-5 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl shadow-md hover:shadow-lg transition-all"
-                onClick={() => setShowSummary(true)}
+                onClick={handleKeyPoints}
+                disabled={isExtractingKeyPoints}
+                className={`px-5 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl shadow-md hover:shadow-lg transition-all flex items-center ${
+                  isExtractingKeyPoints ? "opacity-70 cursor-not-allowed" : ""
+                }`}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
               >
-                Generate Summary
+                <SparklesIcon className="w-5 h-5 mr-2" />
+                {isExtractingKeyPoints ? "Extracting..." : "Extract Key Points"}
               </motion.button>
-            )}
+            </div>
           </motion.div>
         )}
 
@@ -345,6 +408,31 @@ function UploadPage() {
             <div className="w-full p-4 border border-purple-200 rounded-xl bg-purple-50 prose prose-purple max-w-none">
               {summary}
             </div>
+          </motion.div>
+        )}
+
+        {/* Key Points Section */}
+        {keyPoints.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5 }}
+            className="mt-8 bg-white p-6 rounded-xl border border-purple-100 shadow-md"
+          >
+            <h2 className="text-2xl font-semibold text-purple-800 mb-4 flex items-center">
+              <CheckCircleIcon className="w-6 h-6 text-green-500 mr-2" />
+              Key Points
+            </h2>
+            <ul className="list-disc pl-6 bg-purple-50 p-4 rounded-xl space-y-2 border-l-4 border-green-500">
+              {keyPoints.map((point, index) => (
+                <li
+                  key={index}
+                  className="text-gray-700 text-lg font-medium before:content-['✔'] before:mr-2 before:text-green-600"
+                >
+                  {point}
+                </li>
+              ))}
+            </ul>
           </motion.div>
         )}
 
@@ -420,11 +508,14 @@ function UploadPage() {
         </div>
 
         <div className="mt-8 text-center text-sm text-gray-500">
-          <p>Transform your audio into text with our advanced transcription technology</p>
+          <p>
+            Transform your audio into text with our advanced transcription
+            technology
+          </p>
         </div>
       </motion.div>
     </div>
-  )
+  );
 }
 
-export default UploadPage
+export default UploadPage;
