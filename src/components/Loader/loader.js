@@ -1,21 +1,4 @@
-// import React from 'react';
-// import '../Loader/loader.css'; // Import the CSS file
 
-// const Loader = () => {
-//   return (
-//     <div className="flex justify-center items-center h-screen w-screen">
-//       <div className="loading flex justify-center items-center">
-//         <span></span>
-//         <span></span>
-//         <span></span>
-//         <span></span>
-//         <span></span>
-//       </div>
-//     </div>
-//   );
-// };
-
-// export default Loader;
 
 
 import React from 'react';

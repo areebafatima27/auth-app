@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useRef } from "react"
-import { motion } from "framer-motion"
+import { motion, AnimatePresence } from "framer-motion"
 import {
   CloudArrowUpIcon,
   CheckCircleIcon,
@@ -9,10 +9,16 @@ import {
   MicrophoneIcon,
   SpeakerWaveIcon,
   SparklesIcon,
+  ArrowDownTrayIcon,
+  DocumentTextIcon,
+  DocumentDuplicateIcon,
+  KeyIcon,
+  UsersIcon,
 } from "@heroicons/react/24/outline"
 
 function UploadPage() {
   const [audioFile, setAudioFile] = useState(null)
+  const [downloadUrl, setDownloadUrl] = useState(null)
   const [errorMessage, setErrorMessage] = useState("")
   const [recordingMessage, setRecordingMessage] = useState("")
   const [transcription, setTranscription] = useState("")
@@ -24,15 +30,69 @@ function UploadPage() {
   const [showSummary, setShowSummary] = useState(false) // State to control summary visibility
   const [keyPoints, setKeyPoints] = useState([]) // State for key points
   const [isExtractingKeyPoints, setIsExtractingKeyPoints] = useState(false) // Loading state for key points
+  const [activeTab, setActiveTab] = useState("transcription") // State for active tab
   const mediaRecorderRef = useRef(null)
   const audioChunks = useRef([])
+
+  const downloadText = (content, filename) => {
+    const element = document.createElement("a")
+    const file = new Blob([content], { type: "text/plain" })
+    element.href = URL.createObjectURL(file)
+    element.download = filename
+    document.body.appendChild(element)
+    element.click()
+    document.body.removeChild(element)
+
+    // Add a temporary success message
+    const successMessage = document.createElement("div")
+    successMessage.className =
+      "fixed bottom-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 z-50"
+    successMessage.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+    </svg><span>${filename} downloaded successfully!</span>`
+    document.body.appendChild(successMessage)
+
+    // Remove the message after 3 seconds
+    setTimeout(() => {
+      document.body.removeChild(successMessage)
+    }, 3000)
+  }
+
+  // Function to download transcription
+  const downloadTranscription = () => {
+    if (!transcription) return
+    downloadText(transcription, "transcription.txt")
+  }
+
+  // Function to download summary
+  const downloadSummary = () => {
+    if (!summary) return
+    downloadText(summary, "summary.txt")
+  }
+
+  // Function to download key points
+  const downloadKeyPoints = () => {
+    if (keyPoints.length === 0) return
+    const formattedKeyPoints = keyPoints.map((point, index) => `${index + 1}. ${point}`).join("\n")
+    downloadText(formattedKeyPoints, "key-points.txt")
+  }
+
+  // Function to download diarization
+  const downloadDiarization = () => {
+    if (diarization.length === 0) return
+    const formattedDiarization = diarization
+      .map((segment) => `${segment.speaker} (${segment.time_range}):\n${segment.text}\n`)
+      .join("\n")
+    downloadText(formattedDiarization, "speaker-diarization.txt")
+  }
 
   const handleFileChange = (e) => {
     setAudioFile(e.target.files[0])
     setErrorMessage("")
+    setDownloadUrl(null)
   }
 
-  const handleUpload = () => {
+  const handleUpload = async () => {
     if (!audioFile) {
       setErrorMessage("No file selected")
       return
@@ -40,69 +100,85 @@ function UploadPage() {
 
     setIsUploading(true)
     setIsTranscribing(true)
-    setTranscription("")
+    setTranscription("Transcribing the audio, please wait...")
     setSummary("") // Reset summary
     setShowSummary(false) // Hide summary when uploading new file
     setRecordingMessage("")
     setKeyPoints([]) // Reset key points when uploading new file
+    setUploadProgress(0)
+    setActiveTab("transcription") // Reset to transcription tab
 
     const formData = new FormData()
     formData.append("audio", audioFile)
 
-    const xhr = new XMLHttpRequest()
+    try {
+      // Using XMLHttpRequest for progress tracking
+      const xhr = new XMLHttpRequest()
 
-    // Track progress
-    xhr.upload.onprogress = (event) => {
-      if (event.lengthComputable) {
-        const percentComplete = Math.round((event.loaded / event.total) * 100)
-        setUploadProgress(percentComplete)
-      }
-    }
-
-    xhr.onload = () => {
-      if (xhr.status === 200) {
-        const result = JSON.parse(xhr.responseText)
-
-        if (result.transcription) {
-          setTranscription(result.transcription)
-        } else {
-          setTranscription("Transcription failed. Please try again.")
+      // Track progress
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) {
+          const percentComplete = Math.round((event.loaded / event.total) * 100)
+          setUploadProgress(percentComplete)
         }
+      }
 
-        // Handle summary
-        if (result.summary) {
-          setSummary(result.summary)
+      xhr.onload = () => {
+        if (xhr.status === 200) {
+          const result = JSON.parse(xhr.responseText)
+
+          if (result.transcription) {
+            setTranscription(result.transcription)
+          } else {
+            setTranscription("Transcription failed. Please try again.")
+          }
+
+          // Handle summary
+          if (result.summary) {
+            setSummary(result.summary)
+            setShowSummary(true)
+          } else {
+            setSummary("")
+          }
+
+          if (result.diarization && Array.isArray(result.diarization)) {
+            setDiarization(result.diarization)
+          } else {
+            setDiarization([])
+          }
+
+          if (result.keypoints && Array.isArray(result.keypoints)) {
+            setKeyPoints(result.keypoints)
+          }
+
+          setErrorMessage("")
         } else {
+          setErrorMessage("Error uploading audio")
+          setTranscription("")
           setSummary("")
         }
 
-        if (result.diarization && Array.isArray(result.diarization)) {
-          setDiarization(result.diarization)
-        } else {
-          setDiarization([])
-        }
+        setIsUploading(false)
+        setIsTranscribing(false)
+      }
 
-        setErrorMessage("")
-      } else {
+      xhr.onerror = () => {
         setErrorMessage("Error uploading audio")
+        setIsUploading(false)
+        setIsTranscribing(false)
         setTranscription("")
         setSummary("")
       }
 
-      setIsUploading(false)
-      setIsTranscribing(false)
-    }
-
-    xhr.onerror = () => {
+      xhr.open("POST", "http://127.0.0.1:5000/upload")
+      xhr.send(formData)
+    } catch (error) {
       setErrorMessage("Error uploading audio")
       setIsUploading(false)
       setIsTranscribing(false)
       setTranscription("")
       setSummary("")
     }
-
-    xhr.open("POST", "http://127.0.0.1:5000/upload")
-    xhr.send(formData)
   }
 
   const handleKeyPoints = async () => {
@@ -124,6 +200,7 @@ function UploadPage() {
       const result = await response.json()
       setKeyPoints(result.keypoints || []) // Change to lowercase 'keypoints'
       setErrorMessage("")
+      setActiveTab("keypoints") // Switch to keypoints tab after extraction
     } catch (error) {
       console.error("Error extracting key points:", error)
       setErrorMessage("Error extracting key points")
@@ -133,21 +210,35 @@ function UploadPage() {
   }
 
   const startRecording = async () => {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-    mediaRecorderRef.current = new MediaRecorder(stream)
-    mediaRecorderRef.current.ondataavailable = (event) => {
-      audioChunks.current.push(event.data)
-    }
-    mediaRecorderRef.current.onstop = () => {
-      const audioBlob = new Blob(audioChunks.current, { type: "audio/wav" })
-      const audioFile = new File([audioBlob], "recordedAudio.wav", {
-        type: "audio/wav",
-      })
-      setAudioFile(audioFile)
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      mediaRecorderRef.current = new MediaRecorder(stream)
       audioChunks.current = []
+
+      mediaRecorderRef.current.ondataavailable = (event) => {
+        audioChunks.current.push(event.data)
+      }
+
+      mediaRecorderRef.current.onstop = () => {
+        const audioBlob = new Blob(audioChunks.current, { type: "audio/wav" })
+        const audioFile = new File([audioBlob], "recordedAudio.wav", {
+          type: "audio/wav",
+        })
+        setAudioFile(audioFile)
+
+        // Create download URL for the recorded audio
+        const url = URL.createObjectURL(audioBlob)
+        setDownloadUrl(url)
+
+        setRecordingMessage("Recording stopped. You can now save or upload the audio.")
+      }
+
+      mediaRecorderRef.current.start()
+      setRecordingMessage("Recording started...")
+    } catch (error) {
+      setErrorMessage("Error accessing microphone. Please ensure you have granted permission.")
+      console.error("Error starting recording:", error)
     }
-    mediaRecorderRef.current.start()
-    setRecordingMessage("Recording started...")
   }
 
   const pauseRecording = () => {
@@ -167,10 +258,24 @@ function UploadPage() {
   const stopRecording = () => {
     if (mediaRecorderRef.current?.state !== "inactive") {
       mediaRecorderRef.current.stop()
-      setRecordingMessage("Recording stopped.")
-      setTimeout(() => {
-        setRecordingMessage("")
-      }, 2000)
+    }
+  }
+
+  const generateSummary = () => {
+    if (transcription) {
+      setShowSummary(true)
+      if (!summary) {
+        setSummary("Generating summary...")
+        // In a real app, you would call your API here
+        setTimeout(() => {
+          setSummary(
+            "This is a generated summary of your transcription. In a production environment, this would be generated by an AI model based on the transcription content.",
+          )
+          setActiveTab("summary") // Switch to summary tab after generation
+        }, 1500)
+      } else {
+        setActiveTab("summary") // Switch to summary tab if already generated
+      }
     }
   }
 
@@ -196,6 +301,27 @@ function UploadPage() {
       </div>
     )
   }
+
+  // Tab component
+  const Tab = ({ id, label, icon, isActive, onClick }) => {
+    return (
+      <button
+        onClick={() => onClick(id)}
+        className={`flex items-center gap-2 px-4 py-3 rounded-t-lg transition-all ${
+          isActive
+            ? "bg-white text-purple-700 border-t-2 border-l border-r border-purple-300 border-b-0 font-medium"
+            : "bg-purple-50 text-gray-600 hover:bg-purple-100 border border-transparent"
+        }`}
+      >
+        {icon}
+        <span>{label}</span>
+        {isActive && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-purple-600"></div>}
+      </button>
+    )
+  }
+
+  // Check if we have results to show
+  const hasResults = transcription || summary || keyPoints.length > 0 || diarization.length > 0
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-100 via-indigo-100 to-blue-100 flex items-center justify-center p-4">
@@ -235,6 +361,22 @@ function UploadPage() {
             </motion.p>
           )}
         </div>
+
+        {/* Save Audio */}
+        {downloadUrl && (
+          <motion.a
+            href={downloadUrl}
+            download="recordedAudio.wav"
+            className="block text-center mb-6 px-5 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl shadow-md hover:shadow-lg transition-all"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+          >
+            <div className="flex items-center justify-center">
+              <ArrowDownTrayIcon className="w-5 h-5 mr-2" />
+              Save Recorded Audio
+            </div>
+          </motion.a>
+        )}
 
         <motion.button
           className={`w-full py-4 px-6 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-all ${
@@ -331,115 +473,6 @@ function UploadPage() {
           </motion.div>
         )}
 
-        {transcription && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="mt-8 bg-white p-6 rounded-xl border border-purple-100 shadow-md"
-          >
-            <h2 className="text-2xl font-semibold text-purple-800 mb-4 flex items-center">
-              <CheckCircleIcon className="w-6 h-6 text-green-500 mr-2" />
-              Transcription Result
-            </h2>
-            <textarea
-              value={transcription}
-              readOnly
-              rows="6"
-              className="w-full p-4 border border-purple-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-shadow bg-purple-50"
-            ></textarea>
-
-            <div className="flex gap-4 mt-4">
-              {/* "Generate Summary" Button */}
-              {!showSummary && (
-                <motion.button
-                  className="px-5 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl shadow-md hover:shadow-lg transition-all"
-                  onClick={() => setShowSummary(true)}
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                >
-                  Generate Summary
-                </motion.button>
-              )}
-
-              {/* "Extract Key Points" Button */}
-              <motion.button
-                onClick={handleKeyPoints}
-                disabled={isExtractingKeyPoints}
-                className={`px-5 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl shadow-md hover:shadow-lg transition-all flex items-center ${
-                  isExtractingKeyPoints ? "opacity-70 cursor-not-allowed" : ""
-                }`}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                <SparklesIcon className="w-5 h-5 mr-2" />
-                {isExtractingKeyPoints ? "Extracting..." : "Extract Key Points"}
-              </motion.button>
-            </div>
-          </motion.div>
-        )}
-
-        {/* Summary Section */}
-        {showSummary && summary && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-            className="mt-8 bg-white p-6 rounded-xl border border-purple-100 shadow-md"
-          >
-            <h2 className="text-2xl font-semibold text-purple-800 mb-4 flex items-center">
-              <CheckCircleIcon className="w-6 h-6 text-green-500 mr-2" />
-              Summary
-            </h2>
-            <div className="w-full p-4 border border-purple-200 rounded-xl bg-purple-50 prose prose-purple max-w-none">
-              {summary}
-            </div>
-          </motion.div>
-        )}
-
-        {/* Key Points Section */}
-        {keyPoints.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5 }}
-            className="mt-8 bg-white p-6 rounded-xl border border-purple-100 shadow-md"
-          >
-            <h2 className="text-2xl font-semibold text-purple-800 mb-4 flex items-center">
-              <CheckCircleIcon className="w-6 h-6 text-green-500 mr-2" />
-              Key Points
-            </h2>
-            <div className="bg-purple-50 p-4 rounded-xl space-y-3 border-l-4 border-green-500">
-              {keyPoints.map((point, index) => (
-                <div key={index} className="flex items-start text-gray-700 text-lg font-medium">
-                  <span className="text-green-600 mr-2 flex-shrink-0">✓</span>
-                  <span>{point}</span>
-                </div>
-              ))}
-            </div>
-          </motion.div>
-        )}
-
-        {diarization.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="mt-8 bg-white p-6 rounded-xl border border-purple-100 shadow-md"
-          >
-            <h2 className="text-2xl font-semibold text-purple-800 mb-4 flex items-center">
-              <CheckCircleIcon className="w-6 h-6 text-green-500 mr-2" />
-              Speaker Diarization
-            </h2>
-            {diarization.map((segment, index) => (
-              <div key={index} className="mb-4 p-3 bg-purple-50 rounded-lg">
-                <p className="font-semibold text-purple-700">{`${segment.speaker} (${segment.time_range}):`}</p>
-                <p className="text-gray-700">{segment.text}</p>
-              </div>
-            ))}
-          </motion.div>
-        )}
-
         {recordingMessage && (
           <motion.div
             initial={{ opacity: 0 }}
@@ -450,6 +483,216 @@ function UploadPage() {
               <MicrophoneIcon className="w-5 h-5 mr-2 text-yellow-600" />
               {recordingMessage}
             </span>
+          </motion.div>
+        )}
+
+        {/* Tabbed Results Section */}
+        {hasResults && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className="mt-8 bg-white rounded-xl border border-purple-100 shadow-md overflow-hidden"
+          >
+            {/* Tabs */}
+            <div className="flex flex-wrap border-b border-purple-100 relative">
+              <Tab
+                id="transcription"
+                label="Transcription"
+                icon={<DocumentTextIcon className="w-5 h-5" />}
+                isActive={activeTab === "transcription"}
+                onClick={setActiveTab}
+              />
+              {showSummary && summary && (
+                <Tab
+                  id="summary"
+                  label="Summary"
+                  icon={<DocumentDuplicateIcon className="w-5 h-5" />}
+                  isActive={activeTab === "summary"}
+                  onClick={setActiveTab}
+                />
+              )}
+              {keyPoints.length > 0 && (
+                <Tab
+                  id="keypoints"
+                  label="Key Points"
+                  icon={<KeyIcon className="w-5 h-5" />}
+                  isActive={activeTab === "keypoints"}
+                  onClick={setActiveTab}
+                />
+              )}
+              {diarization.length > 0 && (
+                <Tab
+                  id="diarization"
+                  label="Speakers"
+                  icon={<UsersIcon className="w-5 h-5" />}
+                  isActive={activeTab === "diarization"}
+                  onClick={setActiveTab}
+                />
+              )}
+            </div>
+
+            {/* Tab Content */}
+            <div className="p-6">
+              <AnimatePresence mode="wait">
+                {activeTab === "transcription" && transcription && (
+                  <motion.div
+                    key="transcription"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <div className="flex justify-between items-center mb-4">
+                      <h2 className="text-2xl font-semibold text-purple-800 flex items-center">
+                        <CheckCircleIcon className="w-6 h-6 text-green-500 mr-2" />
+                        Transcription Result
+                      </h2>
+                      <motion.button
+                        onClick={downloadTranscription}
+                        className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:bg-gradient-to-r hover:from-purple-700 hover:to-indigo-700 transition-colors shadow-md"
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                      >
+                        <ArrowDownTrayIcon className="w-5 h-5" />
+                        <span>Download</span>
+                      </motion.button>
+                    </div>
+                    <textarea
+                      value={transcription}
+                      readOnly
+                      rows="6"
+                      className="w-full p-4 border border-purple-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-shadow bg-purple-50"
+                    ></textarea>
+
+                    <div className="flex gap-4 mt-4">
+                      {/* "Generate Summary" Button */}
+                      {!showSummary && (
+                        <motion.button
+                          className="px-5 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl shadow-md hover:shadow-lg transition-all"
+                          onClick={generateSummary}
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                        >
+                          Generate Summary
+                        </motion.button>
+                      )}
+
+                      {/* "Extract Key Points" Button */}
+                      {keyPoints.length === 0 && (
+                        <motion.button
+                          onClick={handleKeyPoints}
+                          disabled={isExtractingKeyPoints}
+                          className={`px-5 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl shadow-md hover:shadow-lg transition-all flex items-center ${
+                            isExtractingKeyPoints ? "opacity-70 cursor-not-allowed" : ""
+                          }`}
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                        >
+                          <SparklesIcon className="w-5 h-5 mr-2" />
+                          {isExtractingKeyPoints ? "Extracting..." : "Extract Key Points"}
+                        </motion.button>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+
+                {activeTab === "summary" && summary && (
+                  <motion.div
+                    key="summary"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <div className="flex justify-between items-center mb-4">
+                      <h2 className="text-2xl font-semibold text-purple-800 flex items-center">
+                        <CheckCircleIcon className="w-6 h-6 text-green-500 mr-2" />
+                        Summary
+                      </h2>
+                      <motion.button
+                        onClick={downloadSummary}
+                        className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:bg-gradient-to-r hover:from-purple-700 hover:to-indigo-700 transition-colors shadow-md"
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                      >
+                        <ArrowDownTrayIcon className="w-5 h-5" />
+                        <span>Download</span>
+                      </motion.button>
+                    </div>
+                    <div className="w-full p-4 border border-purple-200 rounded-xl bg-purple-50 prose prose-purple max-w-none">
+                      {summary}
+                    </div>
+                  </motion.div>
+                )}
+
+                {activeTab === "keypoints" && keyPoints.length > 0 && (
+                  <motion.div
+                    key="keypoints"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <div className="flex justify-between items-center mb-4">
+                      <h2 className="text-2xl font-semibold text-purple-800 flex items-center">
+                        <CheckCircleIcon className="w-6 h-6 text-green-500 mr-2" />
+                        Key Points
+                      </h2>
+                      <motion.button
+                        onClick={downloadKeyPoints}
+                        className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:bg-gradient-to-r hover:from-purple-700 hover:to-indigo-700 transition-colors shadow-md"
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                      >
+                        <ArrowDownTrayIcon className="w-5 h-5" />
+                        <span>Download</span>
+                      </motion.button>
+                    </div>
+                    <div className="bg-purple-50 p-4 rounded-xl space-y-3 border-l-4 border-green-500">
+                      {keyPoints.map((point, index) => (
+                        <div key={index} className="flex items-start text-gray-700 text-lg font-medium">
+                          <span className="text-green-600 mr-2 flex-shrink-0">✓</span>
+                          <span>{point}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+
+                {activeTab === "diarization" && diarization.length > 0 && (
+                  <motion.div
+                    key="diarization"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <div className="flex justify-between items-center mb-4">
+                      <h2 className="text-2xl font-semibold text-purple-800 flex items-center">
+                        <CheckCircleIcon className="w-6 h-6 text-green-500 mr-2" />
+                        Speaker Diarization
+                      </h2>
+                      <motion.button
+                        onClick={downloadDiarization}
+                        className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:bg-gradient-to-r hover:from-purple-700 hover:to-indigo-700 transition-colors shadow-md"
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                      >
+                        <ArrowDownTrayIcon className="w-5 h-5" />
+                        <span>Download</span>
+                      </motion.button>
+                    </div>
+                    {diarization.map((segment, index) => (
+                      <div key={index} className="mb-4 p-3 bg-purple-50 rounded-lg">
+                        <p className="font-semibold text-purple-700">{`${segment.speaker} (${segment.time_range}):`}</p>
+                        <p className="text-gray-700">{segment.text}</p>
+                      </div>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </motion.div>
         )}
 
