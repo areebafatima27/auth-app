@@ -197,12 +197,22 @@ def handle_audio_upload():
 
     audio_file = request.files['audio']
     timestamp = str(int(time.time()))
-    audio_filename = f"{timestamp}.wav"
-    audio_filepath = os.path.join(AUDIO_DIR, audio_filename)
-    audio_file.save(audio_filepath)
+    raw_audio_path = os.path.join(AUDIO_DIR, f"{timestamp}_raw.wav")
+    audio_file.save(raw_audio_path)
 
-    diarization_segments = diarize_chunk(audio_filepath)
-    audio_chunks = split_audio_into_chunks(audio_filepath, AUDIO_DIR)
+    # Convert audio to proper 16kHz mono WAV using ffmpeg
+    converted_audio_path = os.path.join(AUDIO_DIR, f"{timestamp}.wav")
+    try:
+        subprocess.run([
+            "ffmpeg", "-y", "-i", raw_audio_path,
+            "-ac", "1", "-ar", "16000", "-sample_fmt", "s16",
+            converted_audio_path
+        ], check=True)
+    except subprocess.CalledProcessError as e:
+        return jsonify({"error": f"Audio conversion failed: {e}"}), 500
+
+    diarization_segments = diarize_chunk(converted_audio_path)
+    audio_chunks = split_audio_into_chunks(converted_audio_path, AUDIO_DIR)
 
     all_transcriptions = []
     for chunk_file in audio_chunks:
@@ -229,8 +239,8 @@ def handle_audio_upload():
         download_url = f"/download/{timestamp}_meeting_notes.txt"
     except Exception as e:
         print(Fore.RED + f"Failed to save file: {e}")
-        download_url = None  # Set to None if file saving fails
-    
+        download_url = None
+
     return jsonify({
         "summary": summary,
         "key_points": key_points,

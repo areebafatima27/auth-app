@@ -113,7 +113,7 @@ const AuthForm = ({ isLogin, toggleForm }) => {
             className="mt-4 w-full h-12 flex items-center justify-center space-x-3 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition duration-300 shadow-sm"
           >
             <FontAwesomeIcon icon={faGoogle} className="text-red-500 text-lg" />
-            <span className="text-gray-700 font-medium">Sign in with Google</span>
+            <span className="text-gray-700 font-medium">Sign up with Google</span>
           </button>
         </div>
 
