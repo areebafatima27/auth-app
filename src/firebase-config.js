@@ -4,13 +4,13 @@ import { getAuth } from 'firebase/auth';
 
 // Firebase project configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyChpdJnGrFruZm85eZ8frqgiID3u-vul8Y",
-  authDomain: "meeting-minutes-4b355.firebaseapp.com",
-  projectId: "meeting-minutes-4b355",
-  storageBucket: "meeting-minutes-4b355.firebaseapp.com",
-  messagingSenderId: "721806925986",
-  appId: "1:721806925986:web:d5a19566ee6d7c74def7fb",
-  measurementId: "G-7JLX0TZYLD"
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
 // Initialize Firebase
