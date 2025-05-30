@@ -16,30 +16,34 @@ const AuthForm = ({ isLogin, toggleForm }) => {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [name, setName] = useState("")
+  const [error, setError] = useState("") // ✅ error state added
   const navigate = useNavigate()
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    setError("") // clear previous error
     try {
       if (isLogin) {
         await signInWithEmailAndPassword(auth, email, password)
       } else {
         await createUserWithEmailAndPassword(auth, email, password)
       }
-      navigate("/templates") // Redirect after successful login
+      navigate("/templates")
     } catch (error) {
-      console.error("Error:", error.message)
+      console.error("Auth Error:", error.message)
+      setError(error.message) // ✅ show error on screen
     }
   }
 
-  // Handle Google Sign-In
   const handleGoogleSignIn = async () => {
     const provider = new GoogleAuthProvider()
+    setError("") // clear previous error
     try {
-      const result = await signInWithPopup(auth, provider)
+      await signInWithPopup(auth, provider)
       navigate("/templates")
     } catch (error) {
       console.error("Google Sign-In Error:", error.message)
+      setError(error.message) // ✅ show error on screen
     }
   }
 
@@ -49,6 +53,14 @@ const AuthForm = ({ isLogin, toggleForm }) => {
         {isLogin ? "Login" : "Signup"}
         <span className="absolute left-0 bottom-0 h-1 w-6 bg-purple-400"></span>
       </div>
+
+      {/* ✅ Show error if exists */}
+      {error && (
+        <div className="bg-red-100 text-red-700 px-4 py-2 rounded-md mb-4 border border-red-400">
+          {error}
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="space-y-4">
         {!isLogin && (
           <div className="input-box relative">
@@ -100,11 +112,12 @@ const AuthForm = ({ isLogin, toggleForm }) => {
           />
         </div>
 
-        {/* Improved Google Sign-In Button */}
         <div className="mt-4">
           <div className="relative flex items-center justify-center">
             <div className="absolute border-t border-gray-300 w-full"></div>
-            <div className="relative bg-white px-4 text-sm text-gray-500">or continue with</div>
+            <div className="relative bg-white px-4 text-sm text-gray-500">
+              or continue with
+            </div>
           </div>
 
           <button
@@ -119,7 +132,11 @@ const AuthForm = ({ isLogin, toggleForm }) => {
 
         <div className="text sign-up-text text-center text-sm text-gray-600">
           {isLogin ? "Don't have an account? " : "Already have an account? "}
-          <button type="button" className="text-purple-600 cursor-pointer hover:underline" onClick={toggleForm}>
+          <button
+            type="button"
+            className="text-purple-600 cursor-pointer hover:underline"
+            onClick={toggleForm}
+          >
             {isLogin ? "Signup now" : "Login now"}
           </button>
         </div>
@@ -129,4 +146,3 @@ const AuthForm = ({ isLogin, toggleForm }) => {
 }
 
 export default AuthForm
-
