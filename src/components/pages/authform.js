@@ -1,51 +1,51 @@
-"use client"
+"use client";
 
-import { useState } from "react"
+import { useState } from "react";
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signInWithPopup,
   GoogleAuthProvider,
-} from "firebase/auth"
-import { auth } from "../../firebase-config"
-import { useNavigate } from "react-router-dom"
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
-import { faGoogle } from "@fortawesome/free-brands-svg-icons"
+} from "firebase/auth";
+import { auth } from "../../firebase-config";
+import { useNavigate } from "react-router-dom";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faGoogle } from "@fortawesome/free-brands-svg-icons";
 
 const AuthForm = ({ isLogin, toggleForm }) => {
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
-  const [name, setName] = useState("")
-  const [error, setError] = useState("") // ✅ error state added
-  const navigate = useNavigate()
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
+  const [error, setError] = useState(""); // ✅ error state added
+  const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
-    e.preventDefault()
-    setError("") // clear previous error
+    e.preventDefault();
+    setError(""); // clear previous error
     try {
       if (isLogin) {
-        await signInWithEmailAndPassword(auth, email, password)
+        await signInWithEmailAndPassword(auth, email, password);
       } else {
-        await createUserWithEmailAndPassword(auth, email, password)
+        await createUserWithEmailAndPassword(auth, email, password);
       }
-      navigate("/templates")
+      navigate("/templates");
     } catch (error) {
-      console.error("Auth Error:", error.message)
-      setError(error.message) // ✅ show error on screen
+      console.error("Auth Error:", error.message);
+      setError(error.message); // ✅ show error on screen
     }
-  }
+  };
 
   const handleGoogleSignIn = async () => {
-    const provider = new GoogleAuthProvider()
-    setError("") // clear previous error
+    const provider = new GoogleAuthProvider();
+    setError(""); // clear previous error
     try {
-      await signInWithPopup(auth, provider)
-      navigate("/templates")
+      await signInWithPopup(auth, provider);
+      navigate("/templates");
     } catch (error) {
-      console.error("Google Sign-In Error:", error.message)
-      setError(error.message) // ✅ show error on screen
+      console.error("Google Sign-In Error:", error.message);
+      setError(error.message); // ✅ show error on screen
     }
-  }
+  };
 
   return (
     <div className="p-8 w-full">
@@ -99,9 +99,12 @@ const AuthForm = ({ isLogin, toggleForm }) => {
         </div>
         {isLogin && (
           <div className="text text-sm text-gray-600">
-            <a href="#" className="text-purple-600 hover:underline">
+            <button
+              onClick={handleForgotPassword} // replace with your function
+              className="text-purple-600 hover:underline"
+            >
               Forgot password?
-            </a>
+            </button>
           </div>
         )}
         <div className="button input-box">
@@ -126,7 +129,9 @@ const AuthForm = ({ isLogin, toggleForm }) => {
             className="mt-4 w-full h-12 flex items-center justify-center space-x-3 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition duration-300 shadow-sm"
           >
             <FontAwesomeIcon icon={faGoogle} className="text-red-500 text-lg" />
-            <span className="text-gray-700 font-medium">Sign up with Google</span>
+            <span className="text-gray-700 font-medium">
+              Sign up with Google
+            </span>
           </button>
         </div>
 
@@ -142,7 +147,7 @@ const AuthForm = ({ isLogin, toggleForm }) => {
         </div>
       </form>
     </div>
-  )
-}
+  );
+};
 
-export default AuthForm
+export default AuthForm;

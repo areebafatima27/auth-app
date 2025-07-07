@@ -1,7 +1,7 @@
-"use client"
+"use client";
 
-import { useState, useRef } from "react"
-import { motion, AnimatePresence } from "framer-motion"
+import { useState, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   CloudArrowUpIcon,
   CheckCircleIcon,
@@ -14,270 +14,281 @@ import {
   DocumentDuplicateIcon,
   KeyIcon,
   UsersIcon,
-} from "@heroicons/react/24/outline"
+} from "@heroicons/react/24/outline";
 
 function UploadPage() {
-  const [audioFile, setAudioFile] = useState(null)
-  const [downloadUrl, setDownloadUrl] = useState(null)
-  const [errorMessage, setErrorMessage] = useState("")
-  const [recordingMessage, setRecordingMessage] = useState("")
-  const [transcription, setTranscription] = useState("")
-  const [summary, setSummary] = useState("") // State for summary
-  const [diarization, setDiarization] = useState([]) // Diarization as an array of objects
-  const [isUploading, setIsUploading] = useState(false)
-  const [uploadProgress, setUploadProgress] = useState(0) // State for upload progress
-  const [isTranscribing, setIsTranscribing] = useState(false)
-  const [showSummary, setShowSummary] = useState(false) // State to control summary visibility
-  const [keyPoints, setKeyPoints] = useState([]) // State for key points
-  const [isExtractingKeyPoints, setIsExtractingKeyPoints] = useState(false) // Loading state for key points
-  const [activeTab, setActiveTab] = useState("transcription") // State for active tab
-  const mediaRecorderRef = useRef(null)
-  const audioChunks = useRef([])
+  const [audioFile, setAudioFile] = useState(null);
+  const [downloadUrl, setDownloadUrl] = useState(null);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [recordingMessage, setRecordingMessage] = useState("");
+  const [transcription, setTranscription] = useState("");
+  const [summary, setSummary] = useState(""); // State for summary
+  const [diarization, setDiarization] = useState([]); // Diarization as an array of objects
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0); // State for upload progress
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [showSummary, setShowSummary] = useState(false); // State to control summary visibility
+  const [keyPoints, setKeyPoints] = useState([]); // State for key points
+  const [isExtractingKeyPoints, setIsExtractingKeyPoints] = useState(false); // Loading state for key points
+  const [activeTab, setActiveTab] = useState("transcription"); // State for active tab
+  const mediaRecorderRef = useRef(null);
+  const audioChunks = useRef([]);
 
   const downloadText = (content, filename) => {
-    const element = document.createElement("a")
-    const file = new Blob([content], { type: "text/plain" })
-    element.href = URL.createObjectURL(file)
-    element.download = filename
-    document.body.appendChild(element)
-    element.click()
-    document.body.removeChild(element)
+    const element = document.createElement("a");
+    const file = new Blob([content], { type: "text/plain" });
+    element.href = URL.createObjectURL(file);
+    element.download = filename;
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
 
     // Add a temporary success message
-    const successMessage = document.createElement("div")
+    const successMessage = document.createElement("div");
     successMessage.className =
-      "fixed bottom-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 z-50"
+      "fixed bottom-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 z-50";
     successMessage.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
       <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-    </svg><span>${filename} downloaded successfully!</span>`
-    document.body.appendChild(successMessage)
+    </svg><span>${filename} downloaded successfully!</span>`;
+    document.body.appendChild(successMessage);
 
     // Remove the message after 3 seconds
     setTimeout(() => {
-      document.body.removeChild(successMessage)
-    }, 3000)
-  }
+      document.body.removeChild(successMessage);
+    }, 3000);
+  };
 
   // Function to download transcription
   const downloadTranscription = () => {
-    if (!transcription) return
-    downloadText(transcription, "transcription.txt")
-  }
+    if (!transcription) return;
+    downloadText(transcription, "transcription.txt");
+  };
 
   // Function to download summary
   const downloadSummary = () => {
-    if (!summary) return
-    downloadText(summary, "summary.txt")
-  }
+    if (!summary) return;
+    downloadText(summary, "summary.txt");
+  };
 
   // Function to download key points
   const downloadKeyPoints = () => {
-    if (keyPoints.length === 0) return
-    const formattedKeyPoints = keyPoints.map((point, index) => `${index + 1}. ${point}`).join("\n")
-    downloadText(formattedKeyPoints, "key-points.txt")
-  }
+    if (keyPoints.length === 0) return;
+    const formattedKeyPoints = keyPoints
+      .map((point, index) => `${index + 1}. ${point}`)
+      .join("\n");
+    downloadText(formattedKeyPoints, "key-points.txt");
+  };
 
   // Function to download diarization
   const downloadDiarization = () => {
-    if (diarization.length === 0) return
+    if (diarization.length === 0) return;
     const formattedDiarization = diarization
-      .map((segment) => `${segment.speaker} (${segment.time_range}):\n${segment.text}\n`)
-      .join("\n")
-    downloadText(formattedDiarization, "speaker-diarization.txt")
-  }
+      .map(
+        (segment) =>
+          `${segment.speaker} (${segment.time_range}):\n${segment.text}\n`
+      )
+      .join("\n");
+    downloadText(formattedDiarization, "speaker-diarization.txt");
+  };
 
   const handleFileChange = (e) => {
-    setAudioFile(e.target.files[0])
-    setErrorMessage("")
-    setDownloadUrl(null)
-  }
+    setAudioFile(e.target.files[0]);
+    setErrorMessage("");
+    setDownloadUrl(null);
+  };
 
   const handleUpload = async () => {
     if (!audioFile) {
-      setErrorMessage("No file selected")
-      return
+      setErrorMessage("No file selected");
+      return;
     }
 
-    setIsUploading(true)
-    setIsTranscribing(true)
-    setTranscription("Transcribing the audio, please wait...")
-    setSummary("") // Reset summary
-    setShowSummary(false) // Hide summary when uploading new file
-    setRecordingMessage("")
-    setKeyPoints([]) // Reset key points when uploading new file
-    setUploadProgress(0)
-    setActiveTab("transcription") // Reset to transcription tab
+    setIsUploading(true);
+    setIsTranscribing(true);
+    setTranscription("Transcribing the audio, please wait...");
+    setSummary(""); // Reset summary
+    setShowSummary(false); // Hide summary when uploading new file
+    setRecordingMessage("");
+    setKeyPoints([]); // Reset key points when uploading new file
+    setUploadProgress(0);
+    setActiveTab("transcription"); // Reset to transcription tab
 
-    const formData = new FormData()
-    formData.append("audio", audioFile)
+    const formData = new FormData();
+    formData.append("audio", audioFile);
 
     try {
       // Using XMLHttpRequest for progress tracking
-      const xhr = new XMLHttpRequest()
+      const xhr = new XMLHttpRequest();
 
       // Track progress
       xhr.upload.onprogress = (event) => {
         if (event.lengthComputable) {
-          const percentComplete = Math.round((event.loaded / event.total) * 100)
-          setUploadProgress(percentComplete)
+          const percentComplete = Math.round(
+            (event.loaded / event.total) * 100
+          );
+          setUploadProgress(percentComplete);
         }
-      }
+      };
 
       xhr.onload = () => {
         if (xhr.status === 200) {
-          const result = JSON.parse(xhr.responseText)
+          const result = JSON.parse(xhr.responseText);
 
           if (result.transcription) {
-            setTranscription(result.transcription)
+            setTranscription(result.transcription);
           } else {
-            setTranscription("Transcription failed. Please try again.")
+            setTranscription("Transcription failed. Please try again.");
           }
 
           // Handle summary
           if (result.summary) {
-            setSummary(result.summary)
-            setShowSummary(true)
+            setSummary(result.summary);
+            setShowSummary(true);
           } else {
-            setSummary("")
+            setSummary("");
           }
 
           if (result.diarization && Array.isArray(result.diarization)) {
-            setDiarization(result.diarization)
+            setDiarization(result.diarization);
           } else {
-            setDiarization([])
+            setDiarization([]);
           }
 
           if (result.keypoints && Array.isArray(result.keypoints)) {
-            setKeyPoints(result.keypoints)
+            setKeyPoints(result.keypoints);
           }
 
-          setErrorMessage("")
+          setErrorMessage("");
         } else {
-          setErrorMessage("Error uploading audio")
-          setTranscription("")
-          setSummary("")
+          setErrorMessage("Error uploading audio");
+          setTranscription("");
+          setSummary("");
         }
 
-        setIsUploading(false)
-        setIsTranscribing(false)
-      }
+        setIsUploading(false);
+        setIsTranscribing(false);
+      };
 
       xhr.onerror = () => {
-        setErrorMessage("Error uploading audio")
-        setIsUploading(false)
-        setIsTranscribing(false)
-        setTranscription("")
-        setSummary("")
-      }
+        setErrorMessage("Error uploading audio");
+        setIsUploading(false);
+        setIsTranscribing(false);
+        setTranscription("");
+        setSummary("");
+      };
 
-      xhr.open("POST", "http://127.0.0.1:5000/upload")
-      xhr.send(formData)
+      xhr.open("POST", "http://127.0.0.1:5000/upload");
+      xhr.send(formData);
     } catch (error) {
-      setErrorMessage("Error uploading audio")
-      setIsUploading(false)
-      setIsTranscribing(false)
-      setTranscription("")
-      setSummary("")
+      setErrorMessage("Error uploading audio");
+      setIsUploading(false);
+      setIsTranscribing(false);
+      setTranscription("");
+      setSummary("");
     }
-  }
+  };
 
   const handleKeyPoints = async () => {
     if (!transcription) {
-      setErrorMessage("No transcription available")
-      return
+      setErrorMessage("No transcription available");
+      return;
     }
 
-    setIsExtractingKeyPoints(true)
+    setIsExtractingKeyPoints(true);
     try {
       const response = await fetch("http://127.0.0.1:5000/extract-keypoints", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ transcription }),
-      })
+      });
 
-      if (!response.ok) throw new Error("Error extracting key points")
+      if (!response.ok) throw new Error("Error extracting key points");
 
-      const result = await response.json()
-      setKeyPoints(result.keypoints || []) // Change to lowercase 'keypoints'
-      setErrorMessage("")
-      setActiveTab("keypoints") // Switch to keypoints tab after extraction
+      const result = await response.json();
+      setKeyPoints(result.keypoints || []); // Change to lowercase 'keypoints'
+      setErrorMessage("");
+      setActiveTab("keypoints"); // Switch to keypoints tab after extraction
     } catch (error) {
-      console.error("Error extracting key points:", error)
-      setErrorMessage("Error extracting key points")
+      console.error("Error extracting key points:", error);
+      setErrorMessage("Error extracting key points");
     } finally {
-      setIsExtractingKeyPoints(false)
+      setIsExtractingKeyPoints(false);
     }
-  }
+  };
 
   const startRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      mediaRecorderRef.current = new MediaRecorder(stream)
-      audioChunks.current = []
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorderRef.current = new MediaRecorder(stream);
+      audioChunks.current = [];
 
       mediaRecorderRef.current.ondataavailable = (event) => {
-        audioChunks.current.push(event.data)
-      }
+        audioChunks.current.push(event.data);
+      };
 
       mediaRecorderRef.current.onstop = () => {
-        const audioBlob = new Blob(audioChunks.current, { type: "audio/wav" })
+        const audioBlob = new Blob(audioChunks.current, { type: "audio/wav" });
         const audioFile = new File([audioBlob], "recordedAudio.wav", {
           type: "audio/wav",
-        })
-        setAudioFile(audioFile)
+        });
+        setAudioFile(audioFile);
 
         // Create download URL for the recorded audio
-        const url = URL.createObjectURL(audioBlob)
-        setDownloadUrl(url)
+        const url = URL.createObjectURL(audioBlob);
+        setDownloadUrl(url);
 
-        setRecordingMessage("Recording stopped. You can now save or upload the audio.")
-      }
+        setRecordingMessage(
+          "Recording stopped. You can now save or upload the audio."
+        );
+      };
 
-      mediaRecorderRef.current.start()
-      setRecordingMessage("Recording started...")
+      mediaRecorderRef.current.start();
+      setRecordingMessage("Recording started...");
     } catch (error) {
-      setErrorMessage("Error accessing microphone. Please ensure you have granted permission.")
-      console.error("Error starting recording:", error)
+      setErrorMessage(
+        "Error accessing microphone. Please ensure you have granted permission."
+      );
+      console.error("Error starting recording:", error);
     }
-  }
+  };
 
   const pauseRecording = () => {
     if (mediaRecorderRef.current?.state === "recording") {
-      mediaRecorderRef.current.pause()
-      setRecordingMessage("Recording paused.")
+      mediaRecorderRef.current.pause();
+      setRecordingMessage("Recording paused.");
     }
-  }
+  };
 
   const resumeRecording = () => {
     if (mediaRecorderRef.current?.state === "paused") {
-      mediaRecorderRef.current.resume()
-      setRecordingMessage("Recording resumed.")
+      mediaRecorderRef.current.resume();
+      setRecordingMessage("Recording resumed.");
     }
-  }
+  };
 
   const stopRecording = () => {
     if (mediaRecorderRef.current?.state !== "inactive") {
-      mediaRecorderRef.current.stop()
+      mediaRecorderRef.current.stop();
     }
-  }
+  };
 
   const generateSummary = () => {
     if (transcription) {
-      setShowSummary(true)
+      setShowSummary(true);
       if (!summary) {
-        setSummary("Generating summary...")
+        setSummary("Generating summary...");
         // In a real app, you would call your API here
         setTimeout(() => {
           setSummary(
-            "This is a generated summary of your transcription. In a production environment, this would be generated by an AI model based on the transcription content.",
-          )
-          setActiveTab("summary") // Switch to summary tab after generation
-        }, 1500)
+            "This is a generated summary of your transcription. In a production environment, this would be generated by an AI model based on the transcription content."
+          );
+          setActiveTab("summary"); // Switch to summary tab after generation
+        }, 1500);
       } else {
-        setActiveTab("summary") // Switch to summary tab if already generated
+        setActiveTab("summary"); // Switch to summary tab if already generated
       }
     }
-  }
+  };
 
   // Audio wave animation for decorative purposes
   const AudioWave = () => {
@@ -299,8 +310,8 @@ function UploadPage() {
           />
         ))}
       </div>
-    )
-  }
+    );
+  };
 
   // Tab component
   const Tab = ({ id, label, icon, isActive, onClick }) => {
@@ -315,13 +326,16 @@ function UploadPage() {
       >
         {icon}
         <span>{label}</span>
-        {isActive && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-purple-600"></div>}
+        {isActive && (
+          <div className="absolute bottom-0 left-0 w-full h-0.5 bg-purple-600"></div>
+        )}
       </button>
-    )
-  }
+    );
+  };
 
   // Check if we have results to show
-  const hasResults = transcription || summary || keyPoints.length > 0 || diarization.length > 0
+  const hasResults =
+    transcription || summary || keyPoints.length > 0 || diarization.length > 0;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-100 via-indigo-100 to-blue-100 flex items-center justify-center p-4">
@@ -348,8 +362,16 @@ function UploadPage() {
             className="w-64 flex flex-col items-center px-4 py-6 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl shadow-lg tracking-wide uppercase border border-purple-700 cursor-pointer hover:from-purple-700 hover:to-indigo-700 transition-all duration-300 transform hover:scale-105"
           >
             <CloudArrowUpIcon className="w-8 h-8" />
-            <span className="mt-2 text-base leading-normal">Select audio file</span>
-            <input type="file" id="audio-file" accept="audio/*" onChange={handleFileChange} className="hidden" />
+            <span className="mt-2 text-base leading-normal">
+              Select audio file
+            </span>
+            <input
+              type="file"
+              id="audio-file"
+              accept="audio/*"
+              onChange={handleFileChange}
+              className="hidden"
+            />
           </label>
           {audioFile && (
             <motion.p
@@ -412,7 +434,9 @@ function UploadPage() {
           >
             <div className="relative w-24 h-24">
               <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-purple-600 text-sm font-medium">Processing</span>
+                <span className="text-purple-600 text-sm font-medium">
+                  Processing
+                </span>
               </div>
               <svg className="animate-spin w-full h-full" viewBox="0 0 100 100">
                 <circle
@@ -439,8 +463,12 @@ function UploadPage() {
                 />
               </svg>
             </div>
-            <p className="mt-4 text-purple-800 font-medium">Transcribing your audio...</p>
-            <p className="text-gray-500 text-sm mt-2">This may take a moment depending on the file size</p>
+            <p className="mt-4 text-purple-800 font-medium">
+              Transcribing your audio...
+            </p>
+            <p className="text-gray-500 text-sm mt-2">
+              This may take a moment depending on the file size
+            </p>
 
             <div className="mt-4 flex space-x-2">
               {[...Array(3)].map((_, i) => (
@@ -548,15 +576,20 @@ function UploadPage() {
                         <CheckCircleIcon className="w-6 h-6 text-green-500 mr-2" />
                         Transcription Result
                       </h2>
-                      <motion.button
-                        onClick={downloadTranscription}
-                        className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:bg-gradient-to-r hover:from-purple-700 hover:to-indigo-700 transition-colors shadow-md"
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                      >
-                        <ArrowDownTrayIcon className="w-5 h-5" />
-                        <span>Download</span>
-                      </motion.button>
+                      {!isTranscribing &&
+                        transcription &&
+                        transcription !==
+                          "Transcribing the audio, please wait..." && (
+                          <motion.button
+                            onClick={downloadTranscription}
+                            className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:bg-gradient-to-r hover:from-purple-700 hover:to-indigo-700 transition-colors shadow-md"
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                          >
+                            <ArrowDownTrayIcon className="w-5 h-5" />
+                            <span>Download</span>
+                          </motion.button>
+                        )}
                     </div>
                     <textarea
                       value={transcription}
@@ -567,32 +600,45 @@ function UploadPage() {
 
                     <div className="flex gap-4 mt-4">
                       {/* "Generate Summary" Button */}
-                      {!showSummary && (
-                        <motion.button
-                          className="px-5 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl shadow-md hover:shadow-lg transition-all"
-                          onClick={generateSummary}
-                          whileHover={{ scale: 1.05 }}
-                          whileTap={{ scale: 0.95 }}
-                        >
-                          Generate Summary
-                        </motion.button>
-                      )}
+
+                      {!isTranscribing &&
+                        !showSummary &&
+                        transcription &&
+                        transcription !==
+                          "Transcribing the audio, please wait..." && (
+                          <motion.button
+                            className="px-5 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl shadow-md hover:shadow-lg transition-all"
+                            onClick={generateSummary}
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                          >
+                            Generate Summary
+                          </motion.button>
+                        )}
 
                       {/* "Extract Key Points" Button */}
-                      {keyPoints.length === 0 && (
-                        <motion.button
-                          onClick={handleKeyPoints}
-                          disabled={isExtractingKeyPoints}
-                          className={`px-5 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl shadow-md hover:shadow-lg transition-all flex items-center ${
-                            isExtractingKeyPoints ? "opacity-70 cursor-not-allowed" : ""
-                          }`}
-                          whileHover={{ scale: 1.05 }}
-                          whileTap={{ scale: 0.95 }}
-                        >
-                          <SparklesIcon className="w-5 h-5 mr-2" />
-                          {isExtractingKeyPoints ? "Extracting..." : "Extract Key Points"}
-                        </motion.button>
-                      )}
+                      {!isTranscribing &&
+                        keyPoints.length === 0 &&
+                        transcription &&
+                        transcription !==
+                          "Transcribing the audio, please wait..." && (
+                          <motion.button
+                            onClick={handleKeyPoints}
+                            disabled={isExtractingKeyPoints}
+                            className={`px-5 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl shadow-md hover:shadow-lg transition-all flex items-center ${
+                              isExtractingKeyPoints
+                                ? "opacity-70 cursor-not-allowed"
+                                : ""
+                            }`}
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                          >
+                            <SparklesIcon className="w-5 h-5 mr-2" />
+                            {isExtractingKeyPoints
+                              ? "Extracting..."
+                              : "Extract Key Points"}
+                          </motion.button>
+                        )}
                     </div>
                   </motion.div>
                 )}
@@ -651,8 +697,13 @@ function UploadPage() {
                     </div>
                     <div className="bg-purple-50 p-4 rounded-xl space-y-3 border-l-4 border-green-500">
                       {keyPoints.map((point, index) => (
-                        <div key={index} className="flex items-start text-gray-700 text-lg font-medium">
-                          <span className="text-green-600 mr-2 flex-shrink-0">✓</span>
+                        <div
+                          key={index}
+                          className="flex items-start text-gray-700 text-lg font-medium"
+                        >
+                          <span className="text-green-600 mr-2 flex-shrink-0">
+                            ✓
+                          </span>
                           <span>{point}</span>
                         </div>
                       ))}
@@ -684,7 +735,10 @@ function UploadPage() {
                       </motion.button>
                     </div>
                     {diarization.map((segment, index) => (
-                      <div key={index} className="mb-4 p-3 bg-purple-50 rounded-lg">
+                      <div
+                        key={index}
+                        className="mb-4 p-3 bg-purple-50 rounded-lg"
+                      >
                         <p className="font-semibold text-purple-700">{`${segment.speaker} (${segment.time_range}):`}</p>
                         <p className="text-gray-700">{segment.text}</p>
                       </div>
@@ -735,11 +789,14 @@ function UploadPage() {
         </div>
 
         <div className="mt-8 text-center text-sm text-gray-500">
-          <p>Transform your audio into text with our advanced transcription technology</p>
+          <p>
+            Transform your audio into text with our advanced transcription
+            technology
+          </p>
         </div>
       </motion.div>
     </div>
-  )
+  );
 }
 
-export default UploadPage
+export default UploadPage;

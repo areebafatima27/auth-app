@@ -25,9 +25,9 @@ const AuthPage = () => {
             >
               {/* Flip container with transition for rotation */}
               <div
-                className={
-                  "flip-container w-full h-full ${isLogin ? '' : 'rotate-y-180'}"
-                }
+                className={`flip-container w-full h-full ${
+                  isLogin ? "" : "rotate-y-180"
+                }`}
                 style={{
                   transformStyle: "preserve-3d", // Ensure children maintain 3D positions
                   transform: isLogin ? "rotateY(0deg)" : "rotateY(180deg)", // Rotate depending on state
