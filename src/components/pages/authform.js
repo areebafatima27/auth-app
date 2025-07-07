@@ -1,5 +1,5 @@
 "use client";
-
+import { sendPasswordResetEmail } from "firebase/auth";
 import { useState } from "react";
 import {
   signInWithEmailAndPassword,
@@ -32,6 +32,19 @@ const AuthForm = ({ isLogin, toggleForm }) => {
     } catch (error) {
       console.error("Auth Error:", error.message);
       setError(error.message); // ✅ show error on screen
+    }
+  };
+  const handleForgotPassword = async () => {
+    if (!email) {
+      setError("Please enter your email to reset password.");
+      return;
+    }
+
+    try {
+      await sendPasswordResetEmail(auth, email);
+      alert("Password reset email sent.");
+    } catch (error) {
+      setError(error.message);
     }
   };
 
